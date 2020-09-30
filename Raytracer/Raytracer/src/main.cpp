@@ -5,6 +5,8 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 //#include "tiny_obj_loader.h"
 #include <vector>
+#include <time.h>
+#include <iostream>
 
 namespace tinyobj
 {
@@ -15,8 +17,8 @@ namespace tinyobj
 
 struct camera
 {
-	int width = 1920;
-	int height = 1080;
+	int width = 300;
+	int height = 300;
 	float fov = 45;
 	glm::vec3 position = { 0.,0.,0. };
 	glm::vec3 lookAt = { 0.,0.,-5. };
@@ -174,9 +176,11 @@ int main(int argc, char* argv[])
 
 			color = glm::clamp(color, { 0.,0.,0. }, { 1.,1.,1. });
 
-			c.renderTarget(x, y, 1, 0) = (unsigned char)(color.r * 255);
-			c.renderTarget(x, y, 1, 1) = (unsigned char)(color.g * 255);
-			c.renderTarget(x, y, 1, 2) = (unsigned char)(color.b * 255);
+			c.renderTarget(x, y, 0, 0) = (unsigned char)(color.r * 255);
+			c.renderTarget(x, y, 0, 1) = (unsigned char)(color.g * 255);
+			c.renderTarget(x, y, 0, 2) = (unsigned char)(color.b * 255);
+
+			//std::cout << "x: " << x << " y, " << y << std::endl;
 
 			c.renderTarget.save("test");
 		}
