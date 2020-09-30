@@ -66,6 +66,7 @@ struct hitInfo
 // Ray triangle intersection using the Moller-Trumbore algorithm (scratchapixel.com)
 bool TestTriIntersection(glm::vec3 ro, glm::vec3 ray, struct hitInfo hit)
 {
+	/* 
 	glm::vec3 v0 = { 5.,0.,-5. };
 	glm::vec3 v1 = { -5.,0.,-5. };
 	glm::vec3 v2 = { 0.,5.,-5. };
@@ -102,6 +103,32 @@ bool TestTriIntersection(glm::vec3 ro, glm::vec3 ray, struct hitInfo hit)
 	//hitInfo.hitNormal = { tempNormal.x, tempNormal.y, tempNormal.z };
 
 	return true;
+	*/
+
+	glm::vec3 so = { 0.,0.,-5 };
+	int sr = 1;
+	//sphere intersect
+	glm::vec3 l = so - ro;
+	float tca = glm::dot(l, ray);
+	if (tca < 0.)
+	{
+		return false;
+	}
+	float d2 = glm::dot(l, l) - tca * tca;
+	if (d2 > sr * sr)
+	{
+		return false;
+	}
+	float thc = sqrt(sr * sr - d2);
+	if (tca - thc < tca + thc && tca - thc > 0)
+	{
+		hit.hitDistance = tca - thc;
+	}
+	else if (tca - thc > tca + thc && tca + thc > 0)
+	{
+		hit.hitDistance = tca + thc;
+	}
+	return true;
 }
 
 glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct scene s, glm::vec3 color, struct directionalLight light)
@@ -122,12 +149,12 @@ glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct scene s, glm::vec
 
 	struct hitInfo occulsion;
 
-	bool occluded = TestTriIntersection(hit.hitPosition + 0.001f * light.direction, light.direction, occulsion);
+	//bool occluded = TestTriIntersection(hit.hitPosition + 0.001f * light.direction, light.direction, occulsion);
 
-	if (occluded)
-	{
-		return color;
-	}
+	//if (occluded)
+	//{
+	//	return color;
+	//}
 
 	color = glm::vec3{ 1.,0.,0. };
 
