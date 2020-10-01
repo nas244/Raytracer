@@ -30,7 +30,7 @@ struct camera
 
 struct directionalLight
 {
-	glm::vec3 direction = { .5,-1.,-1. };
+	glm::vec3 direction = { 0.,-1.,-1. };
 	glm::vec3 color = { 1.,1.,1. };
 };
 
@@ -60,16 +60,46 @@ struct hitInfo
 	glm::vec3 hitNormal;
 	struct materials* hitMaterial;
 	float hitDistance;
+	float hitMisses;
 };
+
+bool TestSphIntersection(glm::vec3 ro, glm::vec3 ray, struct hitInfo hit)
+{
+	float tca = 0.;
+
+	glm::vec3 so = { 0.,0.,-5 };
+	int sr = 1;
+	//sphere intersect
+	glm::vec3 l = so - ro;
+	tca = glm::dot(l, ray);
+	if (tca < 0.)
+	{
+		return false;
+	}
+	float d2 = glm::dot(l, l) - tca * tca;
+	if (d2 > sr * sr)
+	{
+		return false;
+	}
+	float thc = sqrt(sr * sr - d2);
+	if (tca - thc < tca + thc && tca - thc > 0)
+	{
+		hit.hitDistance = tca - thc;
+	}
+	else if (tca - thc > tca + thc && tca + thc > 0)
+	{
+		hit.hitDistance = tca + thc;
+	}
+	return true;
+}
 
 
 // Ray triangle intersection using the Moller-Trumbore algorithm (scratchapixel.com)
 bool TestTriIntersection(glm::vec3 ro, glm::vec3 ray, struct hitInfo hit)
 {
-	/* 
-	glm::vec3 v0 = { 5.,0.,-5. };
-	glm::vec3 v1 = { -5.,0.,-5. };
-	glm::vec3 v2 = { 0.,5.,-5. };
+	glm::vec3 v0 = { 1.,0.,-5. };
+	glm::vec3 v1 = { -1.,0.,-5. };
+	glm::vec3 v2 = { 0.,1.,-5. };
 
 	glm::vec3 v0v1 = v1 - v0;
 	glm::vec3 v0v2 = v2 - v0;
@@ -103,60 +133,42 @@ bool TestTriIntersection(glm::vec3 ro, glm::vec3 ray, struct hitInfo hit)
 	//hitInfo.hitNormal = { tempNormal.x, tempNormal.y, tempNormal.z };
 
 	return true;
-	*/
-
-	glm::vec3 so = { 0.,0.,-5 };
-	int sr = 1;
-	//sphere intersect
-	glm::vec3 l = so - ro;
-	float tca = glm::dot(l, ray);
-	if (tca < 0.)
-	{
-		return false;
-	}
-	float d2 = glm::dot(l, l) - tca * tca;
-	if (d2 > sr * sr)
-	{
-		return false;
-	}
-	float thc = sqrt(sr * sr - d2);
-	if (tca - thc < tca + thc && tca - thc > 0)
-	{
-		hit.hitDistance = tca - thc;
-	}
-	else if (tca - thc > tca + thc && tca + thc > 0)
-	{
-		hit.hitDistance = tca + thc;
-	}
-	return true;
+	
 }
 
-glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct scene s, glm::vec3 color, struct directionalLight light)
+glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct scene s, glm::vec3 color, struct directionalLight light, struct hitInfo hit)
 {
 	if (depth >= s.max_depth)
 	{
 		return color;
 	}
 
-	struct hitInfo hit;
 
-	bool intersectsObject = TestTriIntersection(ro, ray, hit);
+	hit.hitMisses = 0;
+
+	//bool intersectsObject = TestTriIntersection(ro, ray, hit);
+
+	bool intersectsObject = TestSphIntersection(ro, ray, hit);
 
 	if (!intersectsObject)
 	{
-		return color;
+		hit.hitMisses += 1;
+		return glm::vec3{ 0.,0.,0. };
 	}
 
 	struct hitInfo occulsion;
 
-	//bool occluded = TestTriIntersection(hit.hitPosition + 0.001f * light.direction, light.direction, occulsion);
+	bool occluded = TestTriIntersection(hit.hitPosition + 0.001f * light.direction, light.direction, occulsion);
 
-	//if (occluded)
-	//{
-	//	return color;
-	//}
+	if (occluded)
+	{
+		return color;
+	}
+
+
 
 	color = glm::vec3{ 1.,0.,0. };
+
 
 	return color;
 }
@@ -166,14 +178,14 @@ int main(int argc, char* argv[])
 	struct camera c;
 	struct directionalLight light;
 	struct scene s;
-
-	float inversewidth = 1 / c.width;
-	float inverseheight = 1 / c.height;
+	struct hitInfo hit;	double inversewidth = 1 / float(c.width);
+	double inverseheight = 1 / float(c.height);
 	float aspectratio = c.width / c.height;
 	float angle = tan(3.14 * .5 * c.fov / 180.0f);
 	glm::vec4 ro = c.toWorld * glm::vec4{ c.position, 0.};
 	int depth = 0;
 	c.renderTarget.assign(c.width, c.height, 1, 3);
+	double xx, yy;
 
 	glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, -10));
 	transform = glm::rotate(transform, glm::radians(-90.0f), { 1,0,0 });
@@ -186,30 +198,43 @@ int main(int argc, char* argv[])
 	{
 		for (int x = 0; x < c.width; x++)
 		{
+			if (y == 150 && x == 150)
+			{
+				//Sleep(5000);
+			}
 			glm::vec3 color = { 0.,0.,0. };
 			for (int r = 0; r < s.rPerPixel; r++)
 			{
-				float xx = (2 * ((x + 0.5f) * inversewidth) - 1) * angle * aspectratio;
-				float yy = (1 - 2 * ((y + 0.5f) * inverseheight)) * angle;
+
+				xx = (2 * ((x + 0.5f) * inversewidth) - 1) * angle * aspectratio;
+				yy = (1 - 2 * ((y + 0.5f) * inverseheight)) * angle;
 				glm::vec3 ray = { xx,yy,-1 };
 
-				glm::vec4 temp = glm::normalize(c.toWorld * glm::vec4(ray, 1));
-				ray = glm::normalize(glm::vec3(temp.x, temp.y, temp.z));
+				//glm::vec4 temp = glm::normalize(c.toWorld * glm::vec4(ray, 1));
+				//ray = glm::normalize(glm::vec3(temp.x, temp.y, temp.z));
+				ray = glm::normalize(ray);
 
-				color += Trace(ray, { ro.x, ro.y, ro.z }, depth, s, {0., 0., 0.}, light);
+				color += Trace(ray, { ro.x, ro.y, ro.z }, depth, s, {0., 0., 0.}, light, hit);
+				//color = ray;
+
 			}
 
 			color = color / float(s.rPerPixel);
 
 			color = glm::clamp(color, { 0.,0.,0. }, { 1.,1.,1. });
 
-			c.renderTarget(x, y, 0, 0) = (unsigned char)(color.r * 255);
-			c.renderTarget(x, y, 0, 1) = (unsigned char)(color.g * 255);
-			c.renderTarget(x, y, 0, 2) = (unsigned char)(color.b * 255);
+			
 
-			//std::cout << "x: " << x << " y, " << y << std::endl;
+			c.renderTarget(x, y, 0, 0) = (unsigned char)(abs(color.r) * 255);
+			c.renderTarget(x, y, 0, 1) = (unsigned char)(abs(color.g) * 255);
+			c.renderTarget(x, y, 0, 2) = (unsigned char)(abs(color.b) * 255);
 
-			c.renderTarget.save("test");
+			std::cout << "x: " << x << " y, " << y << " misses: " << color.r << std::endl;
+
+
+
+			
 		}
 	}
+	c.renderTarget.save("test.ppm");
 }
