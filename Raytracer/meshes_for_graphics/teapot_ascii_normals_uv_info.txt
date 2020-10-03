@@ -1,0 +1,20 @@
+https://graphics.cs.utah.edu/courses/cs6620/fall2013/?prj=5
+
+low poly mesh extent
+x -15 17.1406002
+y -10 10
+z 0 15.75
+
+low poly mesh
+137 vertices
+138 normals
+78 texture coords
+1 group
+112 quads + 16 triangles -> 240 triangles
+
+high poly mesh
+3241 vertices
+3242 normals
+1588 texture coords
+1 group
+3120 quads + 80 triangles -> 6320 triangles

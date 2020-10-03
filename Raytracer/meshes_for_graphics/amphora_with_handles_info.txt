@@ -1,0 +1,17 @@
+amphora model created by Monika Jankun-Kelly
+has normals
+has texture coords
+no holes in mesh
+
+# amphora_with_handles_v2_hi_poly triangle mesh
+# 1904 vertices
+# 1904 texture coords
+# 1904 vertex normals
+# 3392 triangle faces
+
+# amphora_with_handles_v3_lo_poly triangle mesh
+# 419 vertices
+# 419 texture coords
+# 419 vertex normals
+# 648 triangle faces
+

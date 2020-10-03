@@ -11,7 +11,7 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 IncludeDir = {}
 IncludeDir["glm"] = "RayTracer/lib/glm"
 IncludeDir["CImg"] = "RayTracer/lib/CImg"
-IncludeDir["tinyObj"] = "RayTracer/lib/tinyObj"
+IncludeDir["tinyObj"] = "RayTracer/lib/tinyobjloader"
 
 project "RayTracer"
 	location "TestProgram"

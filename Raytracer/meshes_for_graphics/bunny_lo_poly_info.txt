@@ -1,0 +1,8 @@
+https://github.com/McNopper/OpenGL/blob/master/Binaries/bunny.obj
+
+normals, no textures
+
+holes in bottom
+
+2503 vertices
+4968 triangles
