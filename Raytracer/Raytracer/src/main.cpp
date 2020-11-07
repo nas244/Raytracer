@@ -31,8 +31,8 @@ struct Node
 
 struct camera
 {
-	int width = 300;
-	int height = 300;
+	const int width = 300;
+	const int height = 300;
 	float fov = 45;
 	glm::vec3 position = { 0.,0.,0. };
 	glm::vec3 lookAt = { 0.,0.,-4. };
@@ -46,8 +46,8 @@ struct camera
 
 struct directionalLight
 {
-	glm::vec3 direction = { 1.,1.,1 };
-	glm::vec3 invdirection = { -1.,-1,-1 };
+	glm::vec3 direction = { 0.,1.,1 };
+	glm::vec3 invdirection = { -0.,-1,-1 };
 	glm::vec3 color = { 1.,1.,1. };
 	float intensity = 1;
 };
@@ -67,6 +67,8 @@ struct material
 	glm::vec3 emissive;
 	float ior = 0;
 	float gangle = 0;
+	float roughness = 0;
+	float metalness = 0;
 };
 
 struct model
@@ -113,6 +115,24 @@ struct Node* newNode(struct Node* parent)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+float max(float a, float b)
+{
+	if (a < b)
+	{
+		return b;
+	}
+	return a;
+}
+
+float min(float a, float b)
+{
+	if (a > b)
+	{
+		return b;
+	}
+	return a;
+}
+
 bool solveQuadratic(const float& a, const float& b, const float& c, float& x0, float& x1)
 {
 	float discr = b * b - 4 * a * c;
@@ -394,6 +414,119 @@ float fresnel(glm::vec3 ray, glm::vec3 normal, float ior)
 		kr = (Rs * Rs + Rp * Rp) / 2.0f;
 	}
 	return kr;
+}
+
+glm::vec3 fresnelSchlick(float cosTheta, glm::vec3 F0)
+{
+	float mult = pow(1.0 - cosTheta, 5.0);
+	return F0 + (glm::vec3(1.0,1.0,1.0) - F0) * mult;
+}
+
+float DistributionGGX(glm::vec3 N, glm::vec3 H, float roughness)
+{
+	float a = roughness * roughness;
+	float a2 = a * a;
+	float NdotH = max(0.,glm::dot(N, H));
+	float NdotH2 = NdotH * NdotH;
+
+	float num = a2;
+	float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+	denom = 3.14159 * denom * denom;
+
+	return num / denom;
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+	float r = (roughness + 1.0);
+	float k = (r * r) / 8.0;
+
+	float num = NdotV;
+	float denom = NdotV * (1.0 - k) + k;
+
+	return num / denom;
+}
+
+float GeometrySmith(glm::vec3 N, glm::vec3 V, glm::vec3 L, float roughness)
+{
+	float NdotV = max(0.,glm::dot(N, V));
+	float NdotL = max(0.,glm::dot(N, L));
+	float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+	float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+
+	return ggx1 * ggx2;
+}
+
+//Cook Torrence
+glm::vec3 CookTorrence(glm::vec3 camDir, glm::vec3 lightDir, glm::vec3 normal, glm::vec3 ray, float roughness, glm::vec3 albedo, float metallic)
+{
+	glm::vec3 L = glm::normalize(lightDir);
+	glm::vec3 N = normal;
+	glm::vec3 V = camDir;
+	glm::vec3 H = normalize(V + L);
+
+
+	//glm::vec3 halfAngle = normalize(camDir + lightDir);
+	//float NdotV = max(0., glm::dot(normal, camDir));
+	float NdotL = max(0., glm::dot(N, L));
+	//float NdotH = max(0., glm::dot(normal, L));
+	//float VdotH = max(0., dot(camDir, H));
+
+	float standard = 2.5;
+	//float F = fresnel(ray, normal, standard);
+	/*
+	//Fresnel-Schlick
+	glm::vec3 F0 = glm::vec3(0.04);
+	F0 = glm::mix(F0, albedo, metallic);
+	glm::vec3 F = fresnelSchlick(max(0,glm::dot(camDir, H)), F0);
+
+	//Normal Distribution
+	float NH2 = pow(NdotH, 2.0);
+	float roughness2 = pow(roughness, 2.0);
+
+	float denom = NH2 * roughness2 + (1.0 - NH2);
+	float D = roughness2 / (3.14159 * pow(denom, 2.0));
+
+	//Geometric Attentuation
+	float g1 = (NdotL * 2.0) / (NdotL + sqrt(roughness2 + (1.0 - roughness2) * pow(NdotL, 2.0)));
+	float g2 = (NdotV * 2.0) / (NdotV + sqrt(roughness2 + (1.0 - roughness2) * pow(NdotV, 2.0)));
+	float G = g1 * g2;
+	*/
+
+	glm::vec3 F0 = glm::vec3(0.04);
+	F0 = glm::mix(F0, albedo, metallic);
+
+	float NDF = DistributionGGX(N, H, roughness);
+
+	float G = GeometrySmith(N, V, L, roughness);
+	glm::vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+	//Lambertian Diffuse Coefficent
+	glm::vec3 kS = F;
+	glm::vec3 kD = glm::vec3(1.0) - kS;
+	kD *= 1.0 - metallic;
+
+	//Cook-Torrence
+	//float denom2 = (3.14159 * NdotV);
+	float denominator = 4.0 * max(0.0, glm::dot(N, V)) * max(0., glm::dot(N, L));
+	glm::vec3 specular = (G * F * NDF) / denominator;
+
+	//Lambertian Diffuse + Cook-Torrence
+	glm::vec3 final = (((kD * albedo) / 3.14159f) + specular) * glm::vec3(1., 1., 1.) * NdotL;
+
+	final = glm::clamp(final, { 0.,0.,0. }, { 1.,1.,1. });
+
+	//if (final.x > 1.)
+	//{
+		//std::cout << "kill me" << std::endl;
+		//Sleep(5000);
+	//}
+
+	//ambient
+	//glm::vec3 ambient = glm::vec3(0.03) * albedo * .5f;
+	//final += ambient;
+
+	return final;
 }
 
 bool overlap(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 max, glm::vec3 min)
@@ -898,7 +1031,7 @@ glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct camera c, struct 
 	{
 		delete hit;
 		hit = NULL;
-		return glm::vec3{ 0.,0.,0. };
+		return glm::vec3{ 1.,1.,1. };
 	}
 
 	
@@ -969,10 +1102,10 @@ glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct camera c, struct 
 
 	glm::vec3 diffuse = diff * light.intensity * light.color;
 	
-			
-	
+	glm::vec3 viewdir = normalize(c.position - hit->hitPosition);
+	color = CookTorrence(viewdir, light.direction, hit->hitNormal, ray, mat.roughness, mat.matcolor, mat.metalness);
 
-	if (mat.ref > 0 )
+	if (mat.ref > 0)
 	{
 		s.prevcolor = color;
 		s.prevref = mat.ref;
@@ -988,14 +1121,15 @@ glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct camera c, struct 
 		}
 		reflect_o = hit->hitPosition + 0.001f * reflect;
 
-		glm::vec3 tempcolor = Trace(reflect, reflect_o, depth + 1,c, s, color, light, mod, n);
+		glm::vec3 tempcolor = Trace(reflect, reflect_o, depth + 1, c, s, { 0.,0.,0. }, light, mod, n);
 		//if (tempcolor.y > 0)
 		//{
 			//std::cout << "STOP" << std::endl;
 			//Sleep(5000);
 		//}
-		color = mat.matcolor * (1 - mat.ref) + tempcolor * mat.ref;
-		color = color * diff;
+		tempcolor = color * (1 - mat.ref) + tempcolor * mat.ref * mat.matcolor;
+		color = tempcolor;
+		
 	}
 	else if (mat.ior > 0)
 	{
@@ -1003,7 +1137,7 @@ glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct camera c, struct 
 		s.prevref = mat.ref;
 		glm::vec3 reflect_o;
 		glm::vec3 refract_o;
-		glm::vec3 refract_tempcolor = glm::vec3{0,0,0};
+		glm::vec3 refract_tempcolor = glm::vec3{ 0,0,0 };
 
 		if (hit->inside)
 		{
@@ -1011,9 +1145,9 @@ glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct camera c, struct 
 		}
 		else
 		{
-			 kr = fresnel(ray, hit->hitNormal , mat.ior);
+			kr = fresnel(ray, hit->hitNormal, mat.ior);
 		}
-		
+
 		glm::vec3 reflect = glm::normalize(glm::reflect(ray, hit->hitNormal));
 		if (mod[temp].mat->gangle > 0.00001)
 		{
@@ -1052,15 +1186,6 @@ glm::vec3 Trace(glm::vec3 ray, glm::vec3 ro, int depth, struct camera c, struct 
 
 		color = reflect_tempcolor * kr + refract_tempcolor * (1 - kr);
 	}
-	else
-	{
-		
-		glm::vec3 viewdir = normalize(c.position - hit->hitPosition);
-		glm:: vec3 reflectdir = glm::reflect(light.invdirection, hit->hitNormal);
-		float spec = pow(std::max(glm::dot(viewdir, reflectdir), 0.f), 4.);
-		glm::vec3 specular = spec * .25f * light.color;
-		color = mat.matcolor * (diffuse + specular);
-	}
 
 	delete occulsion;
 	occulsion = NULL;
@@ -1091,6 +1216,14 @@ int main(int argc, char* argv[])
 	struct material* mat5 = new struct material;
 	struct material* mat6 = new struct material;
 
+	bool niaveRien = false;
+	std::vector<std::vector<glm::vec3>> buffer;
+	buffer.resize(c.width);
+	for (int i = 0; i < c.width; ++i)
+	{
+		buffer[i].resize(c.height, glm::vec3(0.));
+	}
+
 	double inversewidth = 1 / float(c.width);
 	double inverseheight = 1 / float(c.height);
 	float aspectratio = c.width / c.height;
@@ -1101,14 +1234,16 @@ int main(int argc, char* argv[])
 	c.renderTarget.assign(c.width, c.height, 1, 3);
 	double xx, yy;
 
-	glm::mat4 transform = glm::translate(glm::mat4(1.0f), { -.75,-.25,-10. });
+	glm::mat4 transform = glm::translate(glm::mat4(1.0f), { .75,-.25,-4. });
 	transform = glm::rotate(transform, glm::radians(-90.0f), { 1,0,0 });
 	transform = glm::rotate(transform, glm::radians(-135.0f), { 0,0,1 });
 	transform = glm::scale(transform, { .05,.05,.05 });
 
-	mat1->matcolor = glm::vec3{ 1.,1.,1. };
+	mat1->matcolor = glm::vec3{ 0.77, 0.78, 0.78 };
 	mat1->ref = 0;
 	mat1->ior = 0;
+	mat1->roughness = .2;
+	mat1->metalness = 1.;
 
 	std::string warning, error;
 	bool loaded = tinyobj::LoadObj(mod1.attrib, mod1.shapes, mod1.materials, &warning, &error, "teapot.obj");
@@ -1123,10 +1258,12 @@ int main(int argc, char* argv[])
 	transform = glm::translate(glm::mat4(1.0f), { -.75,-.25,-4. });
 	transform = glm::rotate(transform, glm::radians(-90.0f), { 1,0,0 });
 	transform = glm::rotate(transform, glm::radians(45.0f), { 0,0,1 });
-	transform = glm::scale(transform, { .025,.025,.025 });
+	transform = glm::scale(transform, { .05,.05,.05 });
 
-	mat2->matcolor = glm::vec3{ 0.,1.,0. };
+	mat2->matcolor = glm::vec3{ 0.77, 0.78, 0.78 };
 	mat2->ref = 0;
+	mat2->roughness = .2;
+	mat2->metalness = 0.;
 
 	loaded = tinyobj::LoadObj(mod2.attrib, mod2.shapes, mod2.materials, &warning, &error, "teapot.obj");
 
@@ -1149,32 +1286,38 @@ int main(int argc, char* argv[])
 	mod3.mat = mat3;
 
 	mat4->matcolor = glm::vec3{ 1.,1.,0. };
-	mat4->ref = .8;
+	mat4->ref = 0;
 	mat4->gangle = 3.14 / 90;
+	mat4->roughness = .5;
+	mat4->metalness = 0;
 
 	mod4.c0 = glm::vec3{ -100,-2,0 };
 	mod4.c1 = glm::vec3{ 100,-1.5,-500 };
 	mod4.modeltype = 2;
-	mod4.modelnum = 3;
+	mod4.modelnum = 0;
 	mod4.mat = mat4;
 
-	mat5->matcolor = glm::vec3{ 0.,0.,1. };
-	mat5->ref = 0.;
+	mat5->matcolor = glm::vec3{ 0.77, 0.78, 0.78 };
+	mat5->ref = .3;
 	mat5->ior = 0.;
+	mat5->roughness = .2;
+	mat5->metalness = 1.;
 
-	mod5.c0 = glm::vec3{ .5,0,-24 };
+	mod5.c0 = glm::vec3{ -1.15,0,-6 };
 	mod5.sr = 1;
-	mod5.modelnum = 4;
+	mod5.modelnum = 1;
 	mod5.modeltype = 1;
 	mod5.mat = mat5;
 
-	mat6->matcolor = glm::vec3{ 0.,0.,1. };
+	mat6->matcolor = glm::vec3{ 0.77, 0.78, 0.78 };
 	mat6->ref = 0.;
-	mat6->ior = 1.5;
+	mat6->ior = 0.;
+	mat6->roughness = .2;
+	mat6->metalness = 0.;
 
-	mod6.c0 = glm::vec3{ .5, .25,-6 };
-	mod6.sr = .75;
-	mod6.modelnum = 0;
+	mod6.c0 = glm::vec3{ 1.15, 0.,-6 };
+	mod6.sr = 1.;
+	mod6.modelnum = 2;
 	mod6.modeltype = 1;
 	mod6.mat = mat6;
 	
@@ -1188,12 +1331,12 @@ int main(int argc, char* argv[])
 	n.push_back(n1);
 	n.push_back(n2);
 	std::vector<struct model> mod;
-	mod.push_back(mod1);
-	mod.push_back(mod2);
-	mod.push_back(mod3);
+	//mod.push_back(mod1);
+	//mod.push_back(mod2);
+	//mod.push_back(mod3);
 	mod.push_back(mod4);
 	mod.push_back(mod5);
-	//mod.push_back(mod6);
+	mod.push_back(mod6);
 
 	std::srand(time(NULL));
 
@@ -1248,19 +1391,50 @@ int main(int argc, char* argv[])
 
 
 			color = color / float(s.rPerPixel);
+			buffer[x][y] = color;
+		}
+	}
+
+	float max_luminance = 0;
+	if (!niaveRien)
+	{
+		for (int y = 0; y < c.height; y++)
+		{
+			for (int x = 0; x < c.width; x++)
+			{
+				glm::vec3 color = buffer[x][y];
+				float temp = glm::dot(color, glm::vec3(0.2126f, 0.7152f, 0.0722f));
+				if (temp > max_luminance)
+				{
+					max_luminance = temp;
+				}
+			}
+		}
+	}
+
+	//Tone Mapping
+	for (int y = 0; y < c.height; y++)
+	{
+		for (int x = 0; x < c.width; x++)
+		{
+			glm::vec3 color = buffer[x][y];
+			if (niaveRien)
+			{
+				color = color / (1.f + color);
+			}
+			else
+			{
+				float l_old = glm::dot(buffer[x][y], glm::vec3(0.2126f, 0.7152f, 0.0722f));
+				float numerator = l_old * (1.0f + (l_old / (max_luminance * max_luminance)));
+				float l_new = numerator / (1.0f + l_old);
+				color = buffer[x][y] * (l_new / l_old);
+			}
 
 			color = glm::clamp(color, { 0.,0.,0. }, { 1.,1.,1. });
-
-
 
 			c.renderTarget(x, y, 0, 0) = (unsigned char)(abs(color.r) * 255);
 			c.renderTarget(x, y, 0, 1) = (unsigned char)(abs(color.g) * 255);
 			c.renderTarget(x, y, 0, 2) = (unsigned char)(abs(color.b) * 255);
-
-			//std::cout << "x: " << x << " y, " << y << " misses: " << color.r << std::endl;
-
-
-
 		}
 	}
 
